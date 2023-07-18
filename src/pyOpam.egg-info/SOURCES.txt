@@ -1,0 +1,12 @@
+README.md
+setup.py
+src/pyOpam/Pcalc.py
+src/pyOpam/Tcalc.py
+src/pyOpam/__init__.py
+src/pyOpam/_version.py
+src/pyOpam/core.py
+src/pyOpam.egg-info/PKG-INFO
+src/pyOpam.egg-info/SOURCES.txt
+src/pyOpam.egg-info/dependency_links.txt
+src/pyOpam.egg-info/requires.txt
+src/pyOpam.egg-info/top_level.txt
