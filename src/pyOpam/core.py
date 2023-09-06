@@ -9,7 +9,7 @@ from scipy.stats import chi2
 
 ## OPAM calculations
 
-def calc_liq_press(*, liq_comps = None, equationP = None, fo2 = None, Fe3Fet_Liq = None, equationT = None):
+def calc_liq_press(*, liq_comps = None, equationP = None, fo2 = None, fo2_offset = None, Fe3Fet_Liq = None, equationT = None, T_K = None):
     '''
     Calculate multi-phase saturation pressure and 'probability' of three phase saturation for basaltic melts. Pressure sensitive equations for the cation fraction of Al, Mg, and Ca in the melt phase are used to determine the pressure of storage by identifying the location of the minimum misfit between the observed and calculated cation fractions.
 
@@ -60,8 +60,9 @@ def calc_liq_press(*, liq_comps = None, equationP = None, fo2 = None, Fe3Fet_Liq
                     equationT="T_Helz1987_MgO"
 
                 # estimate Liq T to convert fO2 into Fe3Fet ratio
-                T = Thermobar.calculate_liq_only_temp(liq_comps=liq,  equationT=equationT)-273.15
-                liq_comp_Fe3 = Thermobar.convert_fo2_to_fe_partition(liq_comps=liq, T_K=T+273.15, P_kbar=3, fo2=fo2, model="Kress1991", renorm=False)
+                if T_K is None:
+                    T_K = Thermobar.calculate_liq_only_temp(liq_comps=liq,  equationT=equationT)
+                liq_comp_Fe3 = Thermobar.convert_fo2_to_fe_partition(liq_comps=liq, T_K=T_K, P_kbar=3, fo2=fo2, fo2_offset = fo2_offset, model="Kress1991", renorm=False)
                 liq['Fe3Fet_Liq'] = liq_comp_Fe3['Fe3Fet_Liq']
             elif Fe3Fet_Liq is not None:
                 liq['Fe3Fet_Liq'] = Fe3Fet_Liq
@@ -69,14 +70,14 @@ def calc_liq_press(*, liq_comps = None, equationP = None, fo2 = None, Fe3Fet_Liq
             #liq_comps['Fe3Fet_Liq'] = liq['Fe3Fet_Liq'].copy()
 
         # As OPAM works using cation fractions, ensure minor elements not included in the OPAM parameterisation are not influencing the cation fraction calculations.
-        if "P2O5_Liq" in list(liq.keys()):
-            liq['P2O5_Liq'] = np.zeros(len(liq['SiO2_Liq']))
-        if "MnO_Liq" in list(liq.keys()):
-            liq['MnO_Liq'] = np.zeros(len(liq['MnO_Liq']))
-        if "H2O_Liq" in list(liq.keys()):
-            liq['H2O_Liq'] = np.zeros(len(liq['H2O_Liq']))
-        if "Cr2O3_Liq" in list(liq.keys()) and equationP != "P_Voigt2017":
-            liq['Cr2O3_Liq'] = np.zeros(len(liq['SiO2_Liq']))
+        # if "P2O5_Liq" in list(liq.keys()):
+        #     liq['P2O5_Liq'] = np.zeros(len(liq['SiO2_Liq']))
+        # if "MnO_Liq" in list(liq.keys()):
+        #     liq['MnO_Liq'] = np.zeros(len(liq['MnO_Liq']))
+        # if "H2O_Liq" in list(liq.keys()):
+        #     liq['H2O_Liq'] = np.zeros(len(liq['H2O_Liq']))
+        # if "Cr2O3_Liq" in list(liq.keys()) and equationP != "P_Voigt2017":
+        #     liq['Cr2O3_Liq'] = np.zeros(len(liq['SiO2_Liq']))
 
         #calculate cation fractions and create np.ndarrays to store outputs
         liq_cats=Thermobar.calculate_anhydrous_cat_fractions_liquid(liq)
@@ -86,7 +87,12 @@ def calc_liq_press(*, liq_comps = None, equationP = None, fo2 = None, Fe3Fet_Liq
         # minimise P for each sample and calculate Pf using scipy.stats.chi2
         for t in range(len(liq_cats['SiO2_Liq'])):
             liq_cat = liq_cats.loc[t].to_dict().copy()
-            res = minimize_scalar(findMin, method = 'brent', args = (liq_cat, equationP))
+
+            def optimize_function(P_GPa):
+                return findMin(P_GPa, liq_cat, equationP)
+
+            res = minimize_scalar(optimize_function, method = 'brent')
+            #res = minimize_scalar(findMin, method = 'brent', args = (liq_cat, equationP))
             P[t] = res.x
             Stats = res.fun
             Prob[t] = 1 - chi2.cdf(Stats, 2)
@@ -224,7 +230,7 @@ def findMin(P_Gpa, liq_cat, equationP):
     else:
         XAl, XMg, XCa = P_Voigt2017(liq_cat, P_Gpa)
 
-    X2 = ((liq_cat['Al_Liq_cat_frac']-XAl)/(0.05*liq_cat['Al_Liq_cat_frac']))**2+((liq_cat['Ca_Liq_cat_frac']-XCa)/(0.05*liq_cat['Ca_Liq_cat_frac']))**2+((liq_cat['Mg_Liq_cat_frac']-XMg)/(0.05*liq_cat['Mg_Liq_cat_frac']))**2
+    X2 = ((liq_cat['Al_Liq_cat_frac']-XAl)/(0.05*liq_cat['Al_Liq_cat_frac']))**2. + ((liq_cat['Ca_Liq_cat_frac']-XCa)/(0.05*liq_cat['Ca_Liq_cat_frac']))**2. + ((liq_cat['Mg_Liq_cat_frac']-XMg)/(0.05*liq_cat['Mg_Liq_cat_frac']))**2.
 
     return X2
 
